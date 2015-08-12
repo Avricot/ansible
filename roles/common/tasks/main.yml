@@ -1,0 +1,76 @@
+- name: Determining username
+  action: shell whoami
+  register: whoami
+  sudo: False
+
+#Bidouille pour runabove ovh qui ne monte pas correctement les interface au démarrage lorsqu'il y en a plusieurs
+#- name: start eth0 and eth1 interface to access both private and public network, priority on eth1 (default route as gateway)
+#  template: src=interfaces.j2 dest=/etc/network/interfaces
+#  notify:
+#    - restart networking
+#  tags: networking
+#
+#- name: restart networking test
+#  command: bash -c "/etc/init.d/networking restart"
+#
+#- name: start eth1 (networking restart is not enough)
+#  command: bash -c "ifup eth1"
+
+- name: be sure ntp is installed
+  apt: name=ntp update_cache=yes
+  tags: ntp
+
+- name: be sure ntp is configured
+  template: src=ntp.conf.j2 dest=/etc/ntp.conf
+  notify:
+    - restart ntp
+  tags: ntp
+
+- name: be sure ntpd is running and enabled
+  service: name=ntp state=running enabled=yes
+  tags: ntp
+
+- name: install vim
+  apt: name=vim update_cache=yes
+
+- name: copy vim template
+  template: src=vimrc dest=/etc/vim/vimrc
+
+
+- name: install zsh
+  apt: name=zsh update_cache=yes
+
+- name: Changing the default shell to zsh
+  action: user shell=/bin/zsh user={{whoami.stdout}}
+
+- name: Copy zsh template files 1/6 (make sure dir exists)
+  file: path=/etc/zsh state=directory
+- name: Copy zsh template files 2/6 (zlogout)
+  template: src=zsh/zlogout dest=/etc/zsh/zlogout
+- name: Copy zsh template files 3/6 (zlogin)
+  template: src=zsh/zlogin dest=/etc/zsh/zlogin
+- name: Copy zsh template files 4/6 (zshenv)
+  template: src=zsh/zshenv dest=/etc/zsh/zshenv
+- name: Copy zsh template files 5/6 (zshrc)
+  template: src=zsh/zshrc dest=/etc/zsh/zshrc
+- name: Copy zsh template files 6/6 (colors)
+  template: src=zsh/dir_colors dest=/etc/dir_colors
+- name: init default user zsh file
+  template: src=empty_file dest=~/.zshrc
+  sudo: False
+
+- name: create ssh-users group
+  group: name=ssh-users state=present
+#- name: add current user to ssh-users group
+#  user: name={{whoami.stdout}} group=ssh-users append=yes
+#- name: add user admin to ssh users group
+#  user: name=admin group=ssh-users append=yes
+- name: add user admin to ssh users group
+  command: bash -c "usermod -a -G ssh-users admin"
+
+- name: apply safe ssh config 
+  template: src=sshd_config dest=/etc/ssh/sshd_config
+  notify:
+    - restart ssh
+
+
